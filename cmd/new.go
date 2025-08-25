@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"text/template"
 
+	_ "embed"
+
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
@@ -14,6 +16,12 @@ import (
 const (
 	defaultBuildName = "kornvim"
 )
+
+//go:embed templates/init.lua.tmpl
+var initLuaTemplate string
+
+//go:embed templates/packages.lua.tmpl
+var packaesLuaTemplate string
 
 var newCmd = &cobra.Command{
 	Use:   "new [path of the custom nvim configuration folder]",
@@ -47,8 +55,7 @@ func executeNew(_ *cobra.Command, args []string) {
 		BuildName: buildName,
 	}
 
-	templatesPath := "./template"
-	executeLuaTemplate(initFilePath, fmt.Sprintf("%s/init.lua.tmpl", templatesPath), initData)
+	executeLuaTemplate(initFilePath, initLuaTemplate, initData)
 
 	packageFilePath := fmt.Sprintf("%s/packages.lua", luaFolderPath)
 	packageData := struct {
@@ -58,7 +65,7 @@ func executeNew(_ *cobra.Command, args []string) {
 		CustomPlugin: customPlugin,
 		PackageName:  guessRepoName(customPlugin),
 	}
-	executeLuaTemplate(packageFilePath, fmt.Sprintf("%s/packages.lua.tmpl", templatesPath), packageData)
+	executeLuaTemplate(packageFilePath, packaesLuaTemplate, packageData)
 }
 
 func buildPath(buildName string) string {
@@ -69,19 +76,14 @@ func init() {
 	rootCmd.AddCommand(newCmd)
 }
 
-func executeLuaTemplate(filePath string, luaTemplatePath string, data any) {
-	luaTemplate, err := os.ReadFile(luaTemplatePath)
-	if err != nil {
-		log.Fatalf("Error while reading %s template file: %+v", luaTemplatePath, err)
-	}
-
+func executeLuaTemplate(filePath string, luaTemplate string, data any) {
 	file, err := os.Create(filePath)
 	if err != nil {
 		log.Fatalf("Error while creating %s file: %+v", filePath, err)
 	}
 	defer file.Close()
 
-	tmpl, err := template.New(filePath).Parse(string(luaTemplate))
+	tmpl, err := template.New(filePath).Parse(luaTemplate)
 	if err != nil {
 		log.Fatalf("Error while parsing %s file template: %+v", filePath, err)
 	}
