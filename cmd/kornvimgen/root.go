@@ -1,4 +1,4 @@
-package commands
+package main
 
 import (
 	"log"
@@ -49,15 +49,29 @@ func initConfig() {
 		if err != nil {
 			log.Fatalln(err)
 		}
-
+		viper.SetConfigName("config")
+		viper.SetConfigType("yaml")
 		viper.AddConfigPath(home)
+		viper.AddConfigPath(".")
 		viper.SetConfigFile(".kornvimgen")
+		viper.SetDefault("current", "kornvim_test")
+		viper.SetDefault("builds", map[string]string{"default": "./kornvim_test"})
 	}
 
 	// fetch environment variables
 	viper.AutomaticEnv()
 
 	if err := viper.ReadInConfig(); err != nil {
+		if _, ok := err.(viper.ConfigFileNotFoundError); ok {
+			log.Println("configuration file not found. I will create one for you")
+
+			if err := viper.SafeWriteConfigAs(viper.ConfigFileUsed()); err != nil {
+				log.Fatalln("error creating default configuration file")
+			}
+		} else {
+			log.Fatalln("configuration file error", err)
+		}
+
 		log.Println("Configuration file loaded", viper.ConfigFileUsed())
 	}
 }
