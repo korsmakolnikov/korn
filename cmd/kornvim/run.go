@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -24,22 +25,55 @@ var runCmd = &cobra.Command{
 }
 
 func executeRun(_ *cobra.Command, args []string) {
-	var buildPath string
-	for build, path := range config.Builds {
-		if config.CurrentBuild == build {
-			buildPath = path
-		}
-	}
-
-	// Retrieving absolute Neovim executable path
 	nvimPath, err := exec.LookPath("nvim")
 	if err != nil {
 		fmt.Println("Cannot locate Neovim", err)
 		os.Exit(1)
 	}
+	if len(args) == 0 {
+		currentPath, err := config.GetCurrentPath()
+		if err != nil {
+			fmt.Println(err)
+			os.Exit(1)
+		}
+		nvimArgs := buildNeovimArguments(currentPath)
+		fmt.Println(nvimPath, nvimArgs)
+		run(nvimArgs, nvimPath)
+		return
+	}
 
-	nvimArguments := buildNeovimArguments(args, buildPath)
-	if err := syscall.Exec(nvimPath, nvimArguments, []string{"KORNVIM_TEST_FLAG", "1"}); err != nil {
+	var currentBuildNotFound, buildNotFound bool
+	buildPath, errBuildPath := config.GetBuildPath(args[0])
+	if errBuildPath != nil {
+		buildNotFound = true
+	}
+
+	currentPath, errCurrentBuildPath := config.GetCurrentPath()
+	if errCurrentBuildPath != nil {
+		currentBuildNotFound = true
+	}
+	if buildNotFound && currentBuildNotFound {
+		fmt.Println(errors.Join(errors.New("the build doesn't exists:"), errBuildPath, errCurrentBuildPath))
+		os.Exit(1)
+	}
+
+	path := currentPath
+	if buildPath != "" {
+		path = buildPath
+	}
+
+	extraArgs := argsToForward(args, !buildNotFound)
+	nvimArgs := buildNeovimArguments(path)
+	nvimArgs = append(nvimArgs, extraArgs...)
+
+	fmt.Println(nvimPath, nvimArgs)
+	run(nvimArgs, nvimPath)
+}
+
+func run(args []string, nvimPath string) {
+	env := os.Environ()
+	env = append(env, "KORNVIM_TEST_FLAG=1")
+	if err := syscall.Exec(nvimPath, args, env); err != nil {
 		fmt.Println("Error running the build", err)
 		os.Exit(1)
 	}
@@ -47,16 +81,41 @@ func executeRun(_ *cobra.Command, args []string) {
 	fmt.Println("Neovim execution terminated normally")
 }
 
-func buildNeovimArguments(args []string, buildPath string) []string {
-	var argumentToForward []string
-	argumentToForward = args
-	// if len(args) > 1 {
-	// 	argumentToForward = args[1:]
-	// }
-	configPath := filepath.Join(buildPath, "init.lua")
-	runtimePath := fmt.Sprintf("set runtimepath^=%s", buildPath)
-	nvimArgs := []string{"-u", configPath, "--cmd", runtimePath}
-	nvimArgs = append(nvimArgs, argumentToForward...)
+func buildNeovimArguments(buildPath string) []string {
+	nvimArgs := newNvimArgs(
+		filepath.Join(buildPath, "lua/init.lua"),
+		fmt.Sprintf("set runtimepath^=%s", buildPath),
+	).toSyscallArgs()
 
 	return nvimArgs
+}
+
+func argsToForward(args []string, buildFound bool) []string {
+	if !buildFound {
+		return args
+	}
+
+	return args[1:]
+}
+
+type nvimArgs struct {
+	Entrypoint  string
+	Runtimepath string
+}
+
+func newNvimArgs(entrypoint string, runtimepath string) nvimArgs {
+	return nvimArgs{
+		Entrypoint:  entrypoint,
+		Runtimepath: runtimepath,
+	}
+}
+
+func (nvmargs nvimArgs) toSyscallArgs() []string {
+	return []string{
+		"nvim",
+		"-u",
+		nvmargs.Entrypoint,
+		"--cmd",
+		nvmargs.Runtimepath,
+	}
 }

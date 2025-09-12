@@ -6,7 +6,6 @@ import (
 
 	"github.com/korsmakolnikov/kornvimgen/pkg/configuration"
 	"github.com/spf13/cobra"
-	"github.com/spf13/viper"
 )
 
 func init() {
@@ -30,8 +29,8 @@ func executeCurrent(_ *cobra.Command, args []string) {
 	}
 
 	config.CurrentBuild = args[0]
-	config.Store(viper.ConfigFileUsed())
-	fmt.Println("configuration set to ", args[0])
+	config.Store()
+	fmt.Printf("configuration set to '%s'", args[0])
 }
 
 func anyBuildName(targetBuildName string, config *configuration.Config) (res bool) {

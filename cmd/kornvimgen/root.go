@@ -1,16 +1,19 @@
 package main
 
 import (
+	"fmt"
 	"log"
 	"os"
 
+	"github.com/korsmakolnikov/kornvimgen/pkg/configuration"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
 
 var (
-	settingFile               string
+	settingFilePath           string
 	customConfigurationPlugin string
+	config                    configuration.Config
 )
 
 const defaultCustomPlugin = "korsmakolnikov/kornvim_configurator"
@@ -33,45 +36,42 @@ func Execute() error {
 }
 
 func init() {
+	defaultSettingFilePath, err := configuration.DefaultSettingFilePath()
+	if err != nil {
+		fmt.Println(err)
+		os.Exit(1)
+	}
+
 	cobra.OnInitialize(initConfig)
-	rootCmd.PersistentFlags().StringVar(&settingFile, "setting", "$HOME/.kornvimgen", "setting file (default is $HOME/.kornvimgen)")
-	rootCmd.PersistentFlags().StringVar(&customConfigurationPlugin, "plugin", defaultCustomPlugin, "your configuration code lazy-compatible plugin namespace")
-	viper.BindPFlag("setting_file", rootCmd.PersistentFlags().Lookup("setting"))
+	rootCmd.PersistentFlags().
+		StringVar(
+			&settingFilePath,
+			"setting",
+			defaultSettingFilePath,
+			fmt.Sprintf("setting file (default is %s)", defaultSettingFilePath),
+		)
+	rootCmd.PersistentFlags().
+		StringVar(
+			&customConfigurationPlugin,
+			"plugin",
+			defaultCustomPlugin,
+			"your configuration code lazy-compatible plugin namespace",
+		)
+	viper.BindPFlag("setting", rootCmd.PersistentFlags().Lookup("setting"))
 	viper.BindPFlag("custom_plugin", rootCmd.PersistentFlags().Lookup("plugin"))
 }
 
 func initConfig() {
-	// assess the setting file or pick the default one
-	if settingFile != "" {
-		viper.SetConfigFile(settingFile)
-	} else {
-		home, err := os.UserHomeDir()
-		if err != nil {
-			log.Fatalln(err)
-		}
-		viper.SetConfigName("config")
-		viper.SetConfigType("yaml")
-		viper.AddConfigPath(home)
-		viper.AddConfigPath(".")
-		viper.SetConfigFile(".kornvimgen")
-		viper.SetDefault("current", "kornvim_test")
-		viper.SetDefault("builds", map[string]string{"default": "./kornvim_test"})
+	configuration.UpsertConfigurationFile()
+	if err := config.Load(); err != nil {
+		log.Fatalln(err)
+	}
+}
+
+func guessBuildName(args []string) (buildName string) {
+	if len(args) > 0 {
+		buildName = args[0]
 	}
 
-	// fetch environment variables
-	viper.AutomaticEnv()
-
-	if err := viper.ReadInConfig(); err != nil {
-		if _, ok := err.(viper.ConfigFileNotFoundError); ok {
-			log.Println("configuration file not found. I will create one for you")
-
-			if err := viper.SafeWriteConfigAs(viper.ConfigFileUsed()); err != nil {
-				log.Fatalln("error creating default configuration file")
-			}
-		} else {
-			log.Fatalln("configuration file error", err)
-		}
-
-		log.Println("Configuration file loaded", viper.ConfigFileUsed())
-	}
+	return
 }

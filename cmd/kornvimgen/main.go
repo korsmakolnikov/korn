@@ -1,9 +1,8 @@
 package main
 
 import (
-	"log"
-
 	_ "embed"
+	"log"
 )
 
 //go:embed templates/init.lua.tmpl

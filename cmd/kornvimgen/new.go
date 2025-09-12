@@ -2,45 +2,58 @@ package main
 
 import (
 	"fmt"
-	"log"
 	"os"
 	"path/filepath"
 	"text/template"
 
+	"github.com/korsmakolnikov/kornvimgen/pkg/configuration"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
-)
-
-const (
-	defaultBuildName = "kornvim"
 )
 
 var newCmd = &cobra.Command{
 	Use:   "new [path of the custom nvim configuration folder]",
 	Short: "generates a basic nvim configuration in a custom directory, installing lazy and a plugin of your choice with your custom configuration",
-	Args:  cobra.MinimumNArgs(0),
+	Args:  cobra.MinimumNArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		executeNew(cmd, args)
 	},
 }
 
-func executeNew(_ *cobra.Command, args []string) {
-	buildName := defaultBuildName
-	if len(args) > 0 {
-		buildName = args[0]
+func init() {
+	rootCmd.AddCommand(newCmd)
+}
+
+func guessNewBuildPath(buildName string) (string, error) {
+	settingPath, err := configuration.DefaultSettingPath()
+	if err != nil {
+		return "", err
 	}
 
+	return filepath.Join(settingPath, "builds/", buildName), nil
+}
+
+// TODO rifattorizza estraendo i template in un package
+func executeNew(_ *cobra.Command, args []string) {
+	buildName := guessBuildName(args)
 	customPlugin := viper.GetString("custom_plugin")
 
-	// creates the build directory and the lua child directory
-	buildPath := buildPath(buildName)
-	luaFolderPath := fmt.Sprintf("%s/lua/", buildPath)
-	log.Println("Creating the directory", buildPath)
-	if err := os.MkdirAll(luaFolderPath, os.ModePerm); err != nil {
-		log.Fatalln("cannot create lua directory in the setting directory", err)
+	buildPath, err := guessNewBuildPath(buildName)
+	if err != nil {
+		fmt.Println(err)
+		os.Exit(1)
 	}
 
-	initFilePath := fmt.Sprintf("%s/init.lua", buildPath)
+	addBuildToConfig(buildName, buildPath)
+
+	luaFolderPath := filepath.Join(buildPath, "lua")
+	fmt.Println("Creating the directory", buildPath)
+	if err := os.MkdirAll(luaFolderPath, os.ModePerm); err != nil {
+		fmt.Println("cannot create lua directory in the setting directory", err)
+		os.Exit(1)
+	}
+
+	initFilePath := filepath.Join(luaFolderPath, "init.lua")
 	initData := struct {
 		BuildName string
 	}{
@@ -49,7 +62,7 @@ func executeNew(_ *cobra.Command, args []string) {
 
 	executeLuaTemplate(initFilePath, InitLuaTemplate, initData)
 
-	packageFilePath := fmt.Sprintf("%s/packages.lua", luaFolderPath)
+	packageFilePath := filepath.Join(luaFolderPath, "packages.lua")
 	packageData := struct {
 		CustomPlugin string
 		PackageName  string
@@ -58,33 +71,39 @@ func executeNew(_ *cobra.Command, args []string) {
 		PackageName:  guessRepoName(customPlugin),
 	}
 	executeLuaTemplate(packageFilePath, PackaesLuaTemplate, packageData)
+
+	if err := config.Store(); err != nil {
+		fmt.Println(err)
+		os.Exit(1)
+	}
 }
 
-func buildPath(buildName string) string {
-	return fmt.Sprintf("./%s/", buildName)
-}
-
-func init() {
-	rootCmd.AddCommand(newCmd)
+func addBuildToConfig(buildName string, buildPath string) {
+	if err := config.AddBuild(buildName, buildPath); err != nil {
+		os.Exit(1)
+	}
 }
 
 func executeLuaTemplate(filePath string, luaTemplate string, data any) {
 	file, err := os.Create(filePath)
 	if err != nil {
-		log.Fatalf("Error while creating %s file: %+v", filePath, err)
+		fmt.Printf("Error while creating %s file: %+v", filePath, err)
+		os.Exit(1)
 	}
 	defer file.Close()
 
 	tmpl, err := template.New(filePath).Parse(luaTemplate)
 	if err != nil {
-		log.Fatalf("Error while parsing %s file template: %+v", filePath, err)
+		fmt.Printf("Error while parsing %s file template: %+v", filePath, err)
+		os.Exit(1)
 	}
 
 	if err := tmpl.Execute(file, data); err != nil {
-		log.Fatalf("Error while execution of %s file template failed: %+v", filePath, err)
+		fmt.Printf("Error while execution of %s file template failed: %+v", filePath, err)
+		os.Exit(1)
 	}
 
-	log.Printf("%s file has been successfully generated", filePath)
+	fmt.Printf("%s file has been successfully generated", filePath)
 }
 
 func guessRepoName(pluginNamespace string) string {
