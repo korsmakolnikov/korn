@@ -19,9 +19,10 @@ var listCmd = &cobra.Command{
 	},
 }
 
+// TODO better formatting
 func executeList(_ *cobra.Command) {
 	fmt.Printf("Build\t\tPath\n")
-	for k, v := range config.Builds {
-		fmt.Printf("%s:\t%s\n", k, v)
+	for buildName, buildPath := range config.Builds {
+		fmt.Printf("%s:\t%s\n", buildName, buildPath)
 	}
 }

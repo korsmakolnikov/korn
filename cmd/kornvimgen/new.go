@@ -30,14 +30,14 @@ func executeNew(_ *cobra.Command, args []string) {
 
 	settingPath, err := configuration.DefaultSettingPath()
 	if err != nil {
-		fmt.Println(err)
+		fmt.Printf("[error] recovering the default setting path %s", err)
 		os.Exit(1)
 	}
 	basePath := filepath.Join(settingPath, "builds/")
 	buildPath := filepath.Join(basePath, buildName)
 
 	if err := config.AddBuild(buildName, buildPath); err != nil {
-		fmt.Println(err)
+		fmt.Printf("[error] updating the configuration build list %s", err)
 		os.Exit(1)
 	}
 
@@ -55,7 +55,7 @@ func executeNew(_ *cobra.Command, args []string) {
 	}
 
 	if err := config.Store(); err != nil {
-		fmt.Println(err)
+		fmt.Printf("[error] storing the configuration %s", err)
 		os.Exit(1)
 	}
 }

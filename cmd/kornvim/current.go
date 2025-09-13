@@ -24,18 +24,18 @@ var currentCmd = &cobra.Command{
 func executeCurrent(_ *cobra.Command, args []string) {
 	targetBuildName := args[0]
 	if !anyBuildName(targetBuildName, &config) {
-		fmt.Println("the build you are trying to set as the current build does not exist")
+		fmt.Println("[error] the build you are trying to set as the current build does not exist")
 		os.Exit(1)
 	}
 
 	config.CurrentBuild = args[0]
 	config.Store()
-	fmt.Printf("configuration set to '%s'", args[0])
+	fmt.Printf("[info] configuration set to '%s'", args[0])
 }
 
 func anyBuildName(targetBuildName string, config *configuration.Config) (res bool) {
-	for k := range config.Builds {
-		if k == targetBuildName {
+	for buildName := range config.Builds {
+		if buildName == targetBuildName {
 			res = true
 		}
 	}

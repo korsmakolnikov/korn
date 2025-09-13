@@ -1,7 +1,6 @@
 package main
 
 import (
-	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -27,17 +26,16 @@ var runCmd = &cobra.Command{
 func executeRun(_ *cobra.Command, args []string) {
 	nvimPath, err := exec.LookPath("nvim")
 	if err != nil {
-		fmt.Println("Cannot locate Neovim", err)
+		fmt.Printf("[error] cannot locate Neovim %s", err)
 		os.Exit(1)
 	}
 	if len(args) == 0 {
 		currentPath, err := config.GetCurrentPath()
 		if err != nil {
-			fmt.Println(err)
+			fmt.Printf("[error] %s", err)
 			os.Exit(1)
 		}
 		nvimArgs := buildNeovimArguments(currentPath)
-		fmt.Println(nvimPath, nvimArgs)
 		run(nvimArgs, nvimPath)
 		return
 	}
@@ -53,7 +51,7 @@ func executeRun(_ *cobra.Command, args []string) {
 		currentBuildNotFound = true
 	}
 	if buildNotFound && currentBuildNotFound {
-		fmt.Println(errors.Join(errors.New("the build doesn't exists:"), errBuildPath, errCurrentBuildPath))
+		fmt.Printf("[error] the build doesn't exists: %s, %s", errBuildPath, errCurrentBuildPath)
 		os.Exit(1)
 	}
 
@@ -66,19 +64,17 @@ func executeRun(_ *cobra.Command, args []string) {
 	nvimArgs := buildNeovimArguments(path)
 	nvimArgs = append(nvimArgs, extraArgs...)
 
-	fmt.Println(nvimPath, nvimArgs)
 	run(nvimArgs, nvimPath)
 }
 
 func run(args []string, nvimPath string) {
 	env := os.Environ()
-	env = append(env, "KORNVIM_TEST_FLAG=1")
 	if err := syscall.Exec(nvimPath, args, env); err != nil {
-		fmt.Println("Error running the build", err)
+		fmt.Printf("[error] running the build %s", err)
 		os.Exit(1)
 	}
 
-	fmt.Println("Neovim execution terminated normally")
+	fmt.Println("[info] Neovim execution terminated normally")
 }
 
 func buildNeovimArguments(buildPath string) []string {

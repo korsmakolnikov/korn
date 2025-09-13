@@ -36,7 +36,7 @@ func NewInit(basePath string, buildName string) Templetable {
 }
 
 func NewPackage(basePath string, buildName string, configurationPlugin string) Templetable {
-	name := "package.lua"
+	name := "packages.lua"
 	buildPath := filepath.Join(basePath, buildName)
 	outputPath := filepath.Join(basePath, buildName, "lua", name)
 	return &PackageTemplate{

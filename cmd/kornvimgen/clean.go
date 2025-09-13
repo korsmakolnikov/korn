@@ -20,26 +20,26 @@ func executeClean(_ *cobra.Command, args []string) {
 	buildName := guessBuildName(args)
 	buildPath, err := config.GetBuildPath(buildName)
 	if err != nil {
-		fmt.Println(err)
+		fmt.Printf("[error] %s", err)
 		os.Exit(1)
 	}
 
 	if err := os.RemoveAll(buildPath); err != nil {
-		fmt.Println("Error cleaning up the build directory:", err)
+		fmt.Printf("[error] cleaning up the build directory: %s", err)
 		os.Exit(1)
 	}
 	cleanBuildFromConfig(buildName)
-	fmt.Println("Cleaned up the build directory", buildPath)
+	fmt.Println("[info] cleaned up the build directory", buildPath)
 }
 
 func cleanBuildFromConfig(buildName string) {
 	err := config.DeleteBuild(buildName)
 	if err != nil {
-		fmt.Println("cannot update the configuration: ", err)
+		fmt.Printf("[error] cannot update the configuration: %s ", err)
 		os.Exit(1)
 	}
 	if err := config.Store(); err != nil {
-		fmt.Println("error while attempting to update the configuration file", err)
+		fmt.Printf("[error] while attempting to update the configuration file %s", err)
 		os.Exit(1)
 	}
 }
