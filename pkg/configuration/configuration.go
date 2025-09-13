@@ -14,6 +14,11 @@ type Config struct {
 	Builds       map[string]string `mapstructure:"builds"`
 }
 
+const (
+	DEFAULT_CONFIG_FOLDER    = ".config/kornvim/"
+	DEFAULT_CONFIG_FILE_NAME = "config"
+)
+
 func Default() Config {
 	builds := make(map[string]string)
 
@@ -28,7 +33,7 @@ func DefaultSettingPath() (defaultSettingPath string, err error) {
 	if err != nil {
 		return
 	}
-	defaultSettingPath = filepath.Join(home, ".config/kornvim/")
+	defaultSettingPath = filepath.Join(home, DEFAULT_CONFIG_FOLDER)
 	return defaultSettingPath, nil
 }
 
@@ -37,7 +42,7 @@ func DefaultSettingFilePath() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	defaultSettingFilePath := filepath.Join(defaultSettingPath, "config")
+	defaultSettingFilePath := filepath.Join(defaultSettingPath, DEFAULT_CONFIG_FILE_NAME)
 	return defaultSettingFilePath, nil
 }
 
@@ -52,11 +57,10 @@ func UpsertConfigurationFile() error {
 
 	if _, err := os.Stat(settingFilePath); os.IsNotExist(err) {
 		os.MkdirAll(filepath.Dir(settingFilePath), os.ModePerm)
-		fmt.Println("creating new config file at: ", settingFilePath)
+		fmt.Println("[info] creating new config file at: ", settingFilePath)
 		f, err := os.OpenFile(settingFilePath, os.O_CREATE|os.O_RDWR, 0644)
 		if err != nil {
-			fmt.Println("failing creating the configuration file due to: ", err)
-			return err
+			return errors.Join(errors.New("failing creating the configuration file"), err)
 		}
 		defer f.Close()
 
@@ -72,8 +76,7 @@ func (cfg Config) Store() error {
 	viper.Set("current", cfg.CurrentBuild)
 	viper.Set("builds", cfg.Builds)
 	if err := viper.WriteConfigAs(settingFilePath); err != nil {
-		fmt.Println("error while storing the kornvim configuration file", err)
-		return err
+		return errors.Join(errors.New("error while storing the kornvim configuration file"), err)
 	}
 
 	return nil
@@ -83,17 +86,14 @@ func (cfg *Config) Load() error {
 	settingFilePath := viper.GetString("setting")
 	if err := viper.ReadInConfig(); err != nil {
 		if _, ok := err.(viper.ConfigFileNotFoundError); ok {
-			fmt.Println("the configuration file you have provided doesn't exist at: ", settingFilePath)
-			return err
+			return errors.Join(fmt.Errorf("the configuration file you have provided doesn't exist at: %s", settingFilePath), err)
 		} else {
-			fmt.Printf("the configuration file is corrupted at: %s due to %+v\n", settingFilePath, err)
-			return err
+			return errors.Join(fmt.Errorf("the configuration file is corrupted at: %s", settingFilePath), err)
 		}
 	}
 
 	if err := viper.Unmarshal(cfg); err != nil {
-		fmt.Println("the configuration cannot be unmarshaled", err)
-		return err
+		return errors.Join(errors.New("the configuration cannot be unmarshaled"), err)
 	}
 
 	if cfg.Builds == nil {

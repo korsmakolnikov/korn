@@ -1,12 +1,13 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
-	"text/template"
 
 	"github.com/korsmakolnikov/kornvimgen/pkg/configuration"
+	"github.com/korsmakolnikov/kornvimgen/pkg/templates"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
@@ -24,53 +25,34 @@ func init() {
 	rootCmd.AddCommand(newCmd)
 }
 
-func guessNewBuildPath(buildName string) (string, error) {
-	settingPath, err := configuration.DefaultSettingPath()
-	if err != nil {
-		return "", err
-	}
-
-	return filepath.Join(settingPath, "builds/", buildName), nil
-}
-
-// TODO rifattorizza estraendo i template in un package
 func executeNew(_ *cobra.Command, args []string) {
 	buildName := guessBuildName(args)
-	customPlugin := viper.GetString("custom_plugin")
 
-	buildPath, err := guessNewBuildPath(buildName)
+	settingPath, err := configuration.DefaultSettingPath()
 	if err != nil {
 		fmt.Println(err)
 		os.Exit(1)
 	}
+	basePath := filepath.Join(settingPath, "builds/")
+	buildPath := filepath.Join(basePath, buildName)
 
-	addBuildToConfig(buildName, buildPath)
-
-	luaFolderPath := filepath.Join(buildPath, "lua")
-	fmt.Println("Creating the directory", buildPath)
-	if err := os.MkdirAll(luaFolderPath, os.ModePerm); err != nil {
-		fmt.Println("cannot create lua directory in the setting directory", err)
+	if err := config.AddBuild(buildName, buildPath); err != nil {
+		fmt.Println(err)
 		os.Exit(1)
 	}
 
-	initFilePath := filepath.Join(luaFolderPath, "init.lua")
-	initData := struct {
-		BuildName string
-	}{
-		BuildName: buildName,
+	initTemplatable := templates.NewInit(basePath, buildName)
+	if err := executeTemplatable(initTemplatable); err != nil {
+		fmt.Println(err)
+		os.Exit(1)
 	}
 
-	executeLuaTemplate(initFilePath, InitLuaTemplate, initData)
-
-	packageFilePath := filepath.Join(luaFolderPath, "packages.lua")
-	packageData := struct {
-		CustomPlugin string
-		PackageName  string
-	}{
-		CustomPlugin: customPlugin,
-		PackageName:  guessRepoName(customPlugin),
+	customPlugin := viper.GetString("custom_plugin")
+	packageLuaTemplatable := templates.NewPackage(basePath, buildName, customPlugin)
+	if err := executeTemplatable(packageLuaTemplatable); err != nil {
+		fmt.Println(err)
+		os.Exit(1)
 	}
-	executeLuaTemplate(packageFilePath, PackaesLuaTemplate, packageData)
 
 	if err := config.Store(); err != nil {
 		fmt.Println(err)
@@ -78,34 +60,27 @@ func executeNew(_ *cobra.Command, args []string) {
 	}
 }
 
-func addBuildToConfig(buildName string, buildPath string) {
-	if err := config.AddBuild(buildName, buildPath); err != nil {
-		os.Exit(1)
-	}
-}
-
-func executeLuaTemplate(filePath string, luaTemplate string, data any) {
-	file, err := os.Create(filePath)
+func executeTemplatable(tmpl templates.Templetable) error {
+	err := tmpl.Parse()
 	if err != nil {
-		fmt.Printf("Error while creating %s file: %+v", filePath, err)
-		os.Exit(1)
+		return errors.Join(errors.New("[error] parsing template"), err)
+	}
+
+	if err := tmpl.Prepare(tmpl.ToPath()); err != nil {
+		return errors.Join(errors.New("[error], preparing template"), err)
+	}
+
+	outputPath := tmpl.ToPath().String()
+	file, err := os.OpenFile(outputPath, os.O_RDWR, 0644)
+	if err != nil {
+		return errors.Join(errors.New("[error] opening output file"), err)
 	}
 	defer file.Close()
 
-	tmpl, err := template.New(filePath).Parse(luaTemplate)
-	if err != nil {
-		fmt.Printf("Error while parsing %s file template: %+v", filePath, err)
-		os.Exit(1)
+	if err := tmpl.Execute(file); err != nil {
+		return errors.Join(errors.New("[error] executing template"), err)
 	}
 
-	if err := tmpl.Execute(file, data); err != nil {
-		fmt.Printf("Error while execution of %s file template failed: %+v", filePath, err)
-		os.Exit(1)
-	}
-
-	fmt.Printf("%s file has been successfully generated", filePath)
-}
-
-func guessRepoName(pluginNamespace string) string {
-	return filepath.Base(pluginNamespace)
+	fmt.Println("[info] file created at path", outputPath)
+	return nil
 }
