@@ -16,6 +16,7 @@ TBD
 * run
 * sanitize (fix the configuration file) TBD
 * add (add plugin) TBD
+* alias (install an alias in the system) TBD
 
 TBD
 
