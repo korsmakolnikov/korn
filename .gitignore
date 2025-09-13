@@ -1,5 +1,2 @@
-*.vim
-korvimgen
-kornvimgen
-kornvim/
-kornvim
+/kornvim
+/kornvimgen
